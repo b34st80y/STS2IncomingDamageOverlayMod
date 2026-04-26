@@ -99,14 +99,14 @@ public partial class IncomingDamageHud : CanvasLayer
         }
 
         object? combatState = ReadMember(_combatNode, "CombatState") ?? ReadMember(_combatNode, "_combatState");
-        PlayerVitals playerVitals = FindPlayerVitals(GetTree().Root);
+        object? localPlayer = FindLocalPlayer(combatState);
+        PlayerVitals playerVitals = FindPlayerVitals(GetTree().Root, localPlayer);
         int block = playerVitals.Block;
         if (block <= 0)
         {
-            object? localPlayer = FindLocalPlayer(combatState);
             block = ReadInt(localPlayer, "Block", "CurrentBlock", "block");
         }
-        int incoming = SumTypedCreatureIntentDamage(GetTree().Root);
+        int incoming = SumTypedCreatureIntentDamage(GetTree().Root, localPlayer);
         if (incoming <= 0)
         {
             incoming = SumIncomingDamage(combatState);
@@ -247,9 +247,10 @@ public partial class IncomingDamageHud : CanvasLayer
         return total;
     }
 
-    private static int SumTypedCreatureIntentDamage(Node root)
+    private static int SumTypedCreatureIntentDamage(Node root, object? localPlayer)
     {
         int total = 0;
+        Creature? localCreature = FindPlayerCreature(root, localPlayer);
 
         foreach (NCreature creatureNode in Walk(root).OfType<NCreature>())
         {
@@ -259,7 +260,9 @@ public partial class IncomingDamageHud : CanvasLayer
                 continue;
             }
 
-            IReadOnlyList<Creature> targets = owner.CombatState?.PlayerCreatures ?? Array.Empty<Creature>();
+            IReadOnlyList<Creature> targets = localCreature is not null
+                ? [localCreature]
+                : owner.CombatState?.PlayerCreatures ?? Array.Empty<Creature>();
             foreach (AbstractIntent intent in owner.Monster?.NextMove?.Intents ?? Array.Empty<AbstractIntent>())
             {
                 if (intent is AttackIntent attackIntent)
@@ -272,26 +275,97 @@ public partial class IncomingDamageHud : CanvasLayer
         return total;
     }
 
-    private static PlayerVitals FindPlayerVitals(Node root)
+    private static PlayerVitals FindPlayerVitals(Node root, object? localPlayer)
     {
-        foreach (NCreature creatureNode in Walk(root).OfType<NCreature>())
+        Creature? entity = FindPlayerCreature(root, localPlayer);
+        if (entity is null)
         {
-            Creature? entity = creatureNode.Entity;
-            if (entity is not null && entity.IsPlayer && !entity.IsDead)
-            {
-                bool hasDefensivePotion = entity.Player?.Potions.Any(IsDefensiveOrWeakPotion) == true;
-                return new PlayerVitals(
-                    entity.Block,
-                    entity.CurrentHp,
-                    hasDefensivePotion,
-                    GetCharacterColor(entity));
-            }
+            return new PlayerVitals(0, 0, false, Colors.White);
         }
 
-        return new PlayerVitals(0, 0, false, Colors.White);
+        bool hasDefensivePotion = entity.Player?.Potions.Any(IsDefensiveOrWeakPotion) == true;
+        return new PlayerVitals(
+            entity.Block,
+            entity.CurrentHp,
+            hasDefensivePotion,
+            GetCharacterColor(entity));
     }
 
     private readonly record struct PlayerVitals(int Block, int CurrentHp, bool HasPotion, Color CharacterColor);
+
+    private static Creature? FindPlayerCreature(Node root, object? localPlayer)
+    {
+        List<Creature> players = Walk(root)
+            .OfType<NCreature>()
+            .Select(creatureNode => creatureNode.Entity)
+            .Where(entity => entity is not null && entity.IsPlayer && !entity.IsDead)
+            .Cast<Creature>()
+            .ToList();
+
+        if (localPlayer is not null)
+        {
+            Creature? matched = players.FirstOrDefault(player => IsSamePlayer(player, localPlayer));
+            if (matched is not null)
+            {
+                return matched;
+            }
+        }
+
+        return players.FirstOrDefault();
+    }
+
+    private static bool IsSamePlayer(Creature playerCreature, object localPlayer)
+    {
+        if (ReferenceEquals(playerCreature, localPlayer) || ReferenceEquals(playerCreature.Player, localPlayer))
+        {
+            return true;
+        }
+
+        object? localCreature = ReadMember(localPlayer, "Creature")
+                                ?? ReadMember(localPlayer, "PlayerCreature")
+                                ?? ReadMember(localPlayer, "Entity");
+        if (ReferenceEquals(playerCreature, localCreature) || ReferenceEquals(playerCreature.Player, localCreature))
+        {
+            return true;
+        }
+
+        object? candidatePlayer = ReadMember(localPlayer, "Player");
+        if (ReferenceEquals(playerCreature.Player, candidatePlayer))
+        {
+            return true;
+        }
+
+        string playerId = FindPlayerId(playerCreature, playerCreature.Player);
+        string localId = FindPlayerId(localPlayer, candidatePlayer, localCreature);
+        return playerId.Length > 0 &&
+               localId.Length > 0 &&
+               string.Equals(playerId, localId, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string FindPlayerId(params object?[] candidates)
+    {
+        foreach (object? candidate in candidates)
+        {
+            string id = ReadString(
+                candidate,
+                "PlayerId",
+                "PlayerID",
+                "PeerId",
+                "PeerID",
+                "NetId",
+                "NetID",
+                "UserId",
+                "UserID",
+                "Id",
+                "ID");
+            if (id.Length > 0)
+            {
+                return id;
+            }
+        }
+
+        return "";
+    }
 
     private static Color GetCharacterColor(Creature player)
     {
