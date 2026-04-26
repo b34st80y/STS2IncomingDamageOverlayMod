@@ -133,9 +133,7 @@ public partial class IncomingDamageHud : CanvasLayer
         _label.Text = isLethal
             ? $"Incoming: {incoming}    After block: {afterBlock}{reminder}    LETHAL"
             : $"Incoming: {incoming}    After block: {afterBlock}{reminder}";
-        _label.AddThemeColorOverride("font_color", isLethal
-            ? new Color(1f, 0.08f, 0.06f)
-            : afterBlock > 0 ? new Color(1f, 0.42f, 0.35f) : new Color(0.68f, 1f, 0.74f));
+        _label.AddThemeColorOverride("font_color", playerVitals.CharacterColor);
     }
 
     private void UpdateEditMode()
@@ -282,14 +280,87 @@ public partial class IncomingDamageHud : CanvasLayer
             if (entity is not null && entity.IsPlayer && !entity.IsDead)
             {
                 bool hasDefensivePotion = entity.Player?.Potions.Any(IsDefensiveOrWeakPotion) == true;
-                return new PlayerVitals(entity.Block, entity.CurrentHp, hasDefensivePotion);
+                return new PlayerVitals(
+                    entity.Block,
+                    entity.CurrentHp,
+                    hasDefensivePotion,
+                    GetCharacterColor(entity));
             }
         }
 
-        return new PlayerVitals(0, 0, false);
+        return new PlayerVitals(0, 0, false, Colors.White);
     }
 
-    private readonly record struct PlayerVitals(int Block, int CurrentHp, bool HasPotion);
+    private readonly record struct PlayerVitals(int Block, int CurrentHp, bool HasPotion, Color CharacterColor);
+
+    private static Color GetCharacterColor(Creature player)
+    {
+        string characterName = FindCharacterName(player);
+        if (characterName.Contains("Ironclad", StringComparison.OrdinalIgnoreCase))
+        {
+            return new Color(1f, 0.12f, 0.08f);
+        }
+
+        if (characterName.Contains("Silent", StringComparison.OrdinalIgnoreCase))
+        {
+            return new Color(0.24f, 0.9f, 0.32f);
+        }
+
+        if (characterName.Contains("Regeant", StringComparison.OrdinalIgnoreCase))
+        {
+            return new Color(1f, 0.52f, 0.08f);
+        }
+
+        if (characterName.Contains("Necrobinder", StringComparison.OrdinalIgnoreCase))
+        {
+            return new Color(0.68f, 0.36f, 1f);
+        }
+
+        if (characterName.Contains("Defect", StringComparison.OrdinalIgnoreCase))
+        {
+            return new Color(0.2f, 0.62f, 1f);
+        }
+
+        return Colors.White;
+    }
+
+    private static string FindCharacterName(Creature player)
+    {
+        object? playerModel = player.Player;
+        object?[] candidates =
+        [
+            ReadMember(playerModel, "Character"),
+            ReadMember(playerModel, "CharacterType"),
+            ReadMember(playerModel, "PlayerClass"),
+            ReadMember(playerModel, "Definition"),
+            ReadMember(playerModel, "Model"),
+            playerModel,
+            player
+        ];
+
+        foreach (object? candidate in candidates)
+        {
+            string name = ReadString(candidate, "Id", "ID", "Name", "CharacterId", "CharacterID", "Key");
+            if (name.Length > 0)
+            {
+                return name;
+            }
+        }
+
+        foreach (object? candidate in candidates)
+        {
+            if (candidate is not null)
+            {
+                string typeName = candidate.GetType().FullName ?? candidate.GetType().Name;
+                if (typeName.Length > 0)
+                {
+                    return typeName;
+                }
+            }
+        }
+
+        return "";
+    }
 
     private static bool IsDefensiveOrWeakPotion(PotionModel potion)
     {
@@ -479,6 +550,26 @@ public partial class IncomingDamageHud : CanvasLayer
         }
 
         return 0;
+    }
+
+    private static string ReadString(object? source, params string[] names)
+    {
+        foreach (string name in names)
+        {
+            object? value = ReadMember(source, name);
+            if (value is null)
+            {
+                continue;
+            }
+
+            string? text = Convert.ToString(value);
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                return text;
+            }
+        }
+
+        return "";
     }
 
     private static object? ReadMember(object? source, string name)
