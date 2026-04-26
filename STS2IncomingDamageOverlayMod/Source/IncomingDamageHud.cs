@@ -99,13 +99,10 @@ public partial class IncomingDamageHud : CanvasLayer
         }
 
         object? combatState = ReadMember(_combatNode, "CombatState") ?? ReadMember(_combatNode, "_combatState");
-        object? localPlayer = FindLocalPlayer(combatState);
-        PlayerVitals playerVitals = FindPlayerVitals(GetTree().Root, localPlayer);
+        string localPlayerId = FindLocalPlayerId(combatState, _combatNode);
+        PlayerCreatureInfo? localPlayer = FindPlayerCreature(GetTree().Root, localPlayerId);
+        PlayerVitals playerVitals = GetPlayerVitals(localPlayer);
         int block = playerVitals.Block;
-        if (block <= 0)
-        {
-            block = ReadInt(localPlayer, "Block", "CurrentBlock", "block");
-        }
         int incoming = SumTypedCreatureIntentDamage(GetTree().Root, localPlayer);
         if (incoming <= 0)
         {
@@ -218,12 +215,25 @@ public partial class IncomingDamageHud : CanvasLayer
         return null;
     }
 
-    private static object? FindLocalPlayer(object? combatState)
+    private static string FindLocalPlayerId(object? combatState, Node? combatNode)
     {
-        return ReadMember(combatState, "LocalPlayer")
-            ?? ReadMember(combatState, "Player")
-            ?? FirstItem(ReadMember(combatState, "Players"))
-            ?? FirstItem(ReadMember(combatState, "PlayerCreatures"));
+        string id = ReadString(
+            combatState,
+            "LocalPlayerId",
+            "LocalPlayerID",
+            "_localPlayerId",
+            "GetLocalPlayerId");
+        if (id.Length <= 0)
+        {
+            id = ReadString(
+                combatNode,
+                "LocalPlayerId",
+                "LocalPlayerID",
+                "_localPlayerId",
+                "GetLocalPlayerId");
+        }
+
+        return id;
     }
 
     private static int SumIncomingDamage(object? combatState)
@@ -247,10 +257,9 @@ public partial class IncomingDamageHud : CanvasLayer
         return total;
     }
 
-    private static int SumTypedCreatureIntentDamage(Node root, object? localPlayer)
+    private static int SumTypedCreatureIntentDamage(Node root, PlayerCreatureInfo? localCreature)
     {
         int total = 0;
-        Creature? localCreature = FindPlayerCreature(root, localPlayer);
 
         foreach (NCreature creatureNode in Walk(root).OfType<NCreature>())
         {
@@ -261,7 +270,7 @@ public partial class IncomingDamageHud : CanvasLayer
             }
 
             IReadOnlyList<Creature> targets = localCreature is not null
-                ? [localCreature]
+                ? [localCreature.Creature]
                 : owner.CombatState?.PlayerCreatures ?? Array.Empty<Creature>();
             foreach (AbstractIntent intent in owner.Monster?.NextMove?.Intents ?? Array.Empty<AbstractIntent>())
             {
@@ -275,71 +284,69 @@ public partial class IncomingDamageHud : CanvasLayer
         return total;
     }
 
-    private static PlayerVitals FindPlayerVitals(Node root, object? localPlayer)
+    private static PlayerVitals GetPlayerVitals(PlayerCreatureInfo? player)
     {
-        Creature? entity = FindPlayerCreature(root, localPlayer);
-        if (entity is null)
+        if (player is null)
         {
             return new PlayerVitals(0, 0, false, Colors.White);
         }
 
+        Creature entity = player.Creature;
         bool hasDefensivePotion = entity.Player?.Potions.Any(IsDefensiveOrWeakPotion) == true;
+        string characterName = FindCharacterName(entity, player.Node);
         return new PlayerVitals(
             entity.Block,
             entity.CurrentHp,
             hasDefensivePotion,
-            GetCharacterColor(entity));
+            GetCharacterColor(characterName));
     }
 
-    private readonly record struct PlayerVitals(int Block, int CurrentHp, bool HasPotion, Color CharacterColor);
+    private readonly record struct PlayerVitals(
+        int Block,
+        int CurrentHp,
+        bool HasPotion,
+        Color CharacterColor);
 
-    private static Creature? FindPlayerCreature(Node root, object? localPlayer)
+    private sealed record PlayerCreatureInfo(NCreature Node, Creature Creature);
+
+    private static PlayerCreatureInfo? FindPlayerCreature(Node root, string localPlayerId)
     {
-        List<Creature> players = Walk(root)
+        List<PlayerCreatureInfo> players = Walk(root)
             .OfType<NCreature>()
-            .Select(creatureNode => creatureNode.Entity)
-            .Where(entity => entity is not null && entity.IsPlayer && !entity.IsDead)
-            .Cast<Creature>()
+            .Select(creatureNode => new PlayerCreatureInfo(creatureNode, creatureNode.Entity!))
+            .Where(player => player.Creature is not null && player.Creature.IsPlayer && !player.Creature.IsDead)
             .ToList();
 
-        if (localPlayer is not null)
+        PlayerCreatureInfo? localFlagMatch = players.FirstOrDefault(IsLocalPlayerCreature);
+        if (localFlagMatch is not null)
         {
-            Creature? matched = players.FirstOrDefault(player => IsSamePlayer(player, localPlayer));
-            if (matched is not null)
+            return localFlagMatch;
+        }
+
+        if (localPlayerId.Length > 0)
+        {
+            PlayerCreatureInfo? idMatch = players.FirstOrDefault(
+                player => string.Equals(
+                    FindPlayerId(player.Creature, player.Creature.Player, player.Node),
+                    localPlayerId,
+                    StringComparison.OrdinalIgnoreCase));
+            if (idMatch is not null)
             {
-                return matched;
+                return idMatch;
             }
         }
 
-        return players.FirstOrDefault();
+        return players.Count == 1 ? players[0] : null;
     }
 
-    private static bool IsSamePlayer(Creature playerCreature, object localPlayer)
+    private static bool IsLocalPlayerCreature(PlayerCreatureInfo player)
     {
-        if (ReferenceEquals(playerCreature, localPlayer) || ReferenceEquals(playerCreature.Player, localPlayer))
+        if (IsLocalObject(player.Node) || IsLocalObject(player.Creature) || IsLocalObject(player.Creature.Player))
         {
             return true;
         }
 
-        object? localCreature = ReadMember(localPlayer, "Creature")
-                                ?? ReadMember(localPlayer, "PlayerCreature")
-                                ?? ReadMember(localPlayer, "Entity");
-        if (ReferenceEquals(playerCreature, localCreature) || ReferenceEquals(playerCreature.Player, localCreature))
-        {
-            return true;
-        }
-
-        object? candidatePlayer = ReadMember(localPlayer, "Player");
-        if (ReferenceEquals(playerCreature.Player, candidatePlayer))
-        {
-            return true;
-        }
-
-        string playerId = FindPlayerId(playerCreature, playerCreature.Player);
-        string localId = FindPlayerId(localPlayer, candidatePlayer, localCreature);
-        return playerId.Length > 0 &&
-               localId.Length > 0 &&
-               string.Equals(playerId, localId, StringComparison.OrdinalIgnoreCase);
+        return Walk(player.Node).Any(IsLocalObject);
     }
 
     private static string FindPlayerId(params object?[] candidates)
@@ -348,14 +355,25 @@ public partial class IncomingDamageHud : CanvasLayer
         {
             string id = ReadString(
                 candidate,
+                "LocalPlayerId",
+                "LocalPlayerID",
+                "_localPlayerId",
+                "GetLocalPlayerId",
                 "PlayerId",
                 "PlayerID",
+                "_playerId",
                 "PeerId",
                 "PeerID",
+                "_peerId",
                 "NetId",
                 "NetID",
+                "_netId",
                 "UserId",
                 "UserID",
+                "_userId",
+                "OwnerId",
+                "OwnerID",
+                "_ownerId",
                 "Id",
                 "ID");
             if (id.Length > 0)
@@ -367,9 +385,13 @@ public partial class IncomingDamageHud : CanvasLayer
         return "";
     }
 
-    private static Color GetCharacterColor(Creature player)
+    private static bool IsLocalObject(object? source)
     {
-        string characterName = FindCharacterName(player);
+        return ReadBool(source, "IsLocal", "_isLocal", "Local", "IsLocalPlayer", "_displayLocalPlayer");
+    }
+
+    private static Color GetCharacterColor(string characterName)
+    {
         if (characterName.Contains("Ironclad", StringComparison.OrdinalIgnoreCase))
         {
             return new Color(1f, 0.12f, 0.08f);
@@ -380,7 +402,8 @@ public partial class IncomingDamageHud : CanvasLayer
             return new Color(0.24f, 0.9f, 0.32f);
         }
 
-        if (characterName.Contains("Regeant", StringComparison.OrdinalIgnoreCase))
+        if (characterName.Contains("Regeant", StringComparison.OrdinalIgnoreCase) ||
+            characterName.Contains("Regent", StringComparison.OrdinalIgnoreCase))
         {
             return new Color(1f, 0.52f, 0.08f);
         }
@@ -398,8 +421,14 @@ public partial class IncomingDamageHud : CanvasLayer
         return Colors.White;
     }
 
-    private static string FindCharacterName(Creature player)
+    private static string FindCharacterName(Creature player, NCreature? playerNode)
     {
+        string nodeName = FindCharacterNameFromNode(playerNode);
+        if (nodeName.Length > 0)
+        {
+            return nodeName;
+        }
+
         object? playerModel = player.Player;
         object?[] candidates =
         [
@@ -434,6 +463,35 @@ public partial class IncomingDamageHud : CanvasLayer
         }
 
         return "";
+    }
+
+    private static string FindCharacterNameFromNode(Node? playerNode)
+    {
+        if (playerNode is null)
+        {
+            return "";
+        }
+
+        foreach (Node node in Walk(playerNode))
+        {
+            string text = $"{node.Name} {node.GetType().Name} {node.GetType().FullName}";
+            if (ContainsKnownCharacterName(text))
+            {
+                return text;
+            }
+        }
+
+        return "";
+    }
+
+    private static bool ContainsKnownCharacterName(string text)
+    {
+        return text.Contains("Ironclad", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("Silent", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("Regeant", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("Regent", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("Necrobinder", StringComparison.OrdinalIgnoreCase) ||
+               text.Contains("Defect", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsDefensiveOrWeakPotion(PotionModel potion)
@@ -644,6 +702,29 @@ public partial class IncomingDamageHud : CanvasLayer
         }
 
         return "";
+    }
+
+    private static bool ReadBool(object? source, params string[] names)
+    {
+        foreach (string name in names)
+        {
+            object? value = ReadMember(source, name);
+            if (value is null)
+            {
+                continue;
+            }
+
+            try
+            {
+                return Convert.ToBoolean(value);
+            }
+            catch
+            {
+                // Ignore non-boolean candidate members.
+            }
+        }
+
+        return false;
     }
 
     private static object? ReadMember(object? source, string name)
