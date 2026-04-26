@@ -103,14 +103,15 @@ public partial class IncomingDamageHud : CanvasLayer
         PlayerCreatureInfo? localPlayer = FindPlayerCreature(GetTree().Root, localPlayerId);
         PlayerVitals playerVitals = GetPlayerVitals(localPlayer);
         int block = playerVitals.Block;
-        int incoming = SumTypedCreatureIntentDamage(GetTree().Root, localPlayer);
-        if (incoming <= 0)
+        IntentDamage typedDamage = SumTypedCreatureIntentDamage(GetTree().Root, localPlayer);
+        int incoming = typedDamage.Total;
+        if (!typedDamage.HasTypedIntents)
         {
             incoming = SumIncomingDamage(combatState);
-        }
-        if (incoming <= 0)
-        {
-            incoming = SumVisibleIntentDamage(GetTree().Root);
+            if (incoming <= 0)
+            {
+                incoming = SumVisibleIntentDamage(GetTree().Root);
+            }
         }
 
         if (incoming <= 0)
@@ -257,9 +258,12 @@ public partial class IncomingDamageHud : CanvasLayer
         return total;
     }
 
-    private static int SumTypedCreatureIntentDamage(Node root, PlayerCreatureInfo? localCreature)
+    private readonly record struct IntentDamage(int Total, bool HasTypedIntents);
+
+    private static IntentDamage SumTypedCreatureIntentDamage(Node root, PlayerCreatureInfo? localCreature)
     {
         int total = 0;
+        bool hasTypedIntents = false;
 
         foreach (NCreature creatureNode in Walk(root).OfType<NCreature>())
         {
@@ -272,7 +276,15 @@ public partial class IncomingDamageHud : CanvasLayer
             IReadOnlyList<Creature> targets = localCreature is not null
                 ? [localCreature.Creature]
                 : owner.CombatState?.PlayerCreatures ?? Array.Empty<Creature>();
-            foreach (AbstractIntent intent in owner.Monster?.NextMove?.Intents ?? Array.Empty<AbstractIntent>())
+            object? nextMove = owner.Monster?.NextMove;
+            if (nextMove is null)
+            {
+                continue;
+            }
+
+            IReadOnlyList<AbstractIntent> intents = owner.Monster?.NextMove?.Intents ?? Array.Empty<AbstractIntent>();
+            hasTypedIntents = true;
+            foreach (AbstractIntent intent in intents)
             {
                 if (intent is AttackIntent attackIntent)
                 {
@@ -281,7 +293,7 @@ public partial class IncomingDamageHud : CanvasLayer
             }
         }
 
-        return total;
+        return new IntentDamage(total, hasTypedIntents);
     }
 
     private static PlayerVitals GetPlayerVitals(PlayerCreatureInfo? player)
