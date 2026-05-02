@@ -1,6 +1,7 @@
 using Godot;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Modding;
+using STS2IncomingDamageOverlayMod.Presentation;
 
 namespace STS2IncomingDamageOverlayMod;
 

@@ -1,199 +1,60 @@
 using System.Collections;
-using System.Reflection;
 using Godot;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.MonsterMoves.Intents;
 using MegaCrit.Sts2.Core.Nodes.Combat;
+using STS2IncomingDamageOverlayMod.Application;
+using STS2IncomingDamageOverlayMod.Domain;
+using static STS2IncomingDamageOverlayMod.Infrastructure.GodotSceneWalker;
+using static STS2IncomingDamageOverlayMod.Infrastructure.ReflectionMemberReader;
 
-namespace STS2IncomingDamageOverlayMod;
+namespace STS2IncomingDamageOverlayMod.Infrastructure;
 
-public partial class IncomingDamageHud : CanvasLayer
+internal sealed class CombatDamageReader : ICombatDamageReader
 {
-    private readonly PanelContainer _panel = new();
-    private readonly Label _label = new();
-    private readonly OverlayConfig _config = OverlayConfig.Load();
-    private bool _isDragging;
-    private bool _wasEditMode;
-    private Vector2 _dragOffset;
-    private double _nextScanAt;
     private Node? _combatNode;
 
-    public override void _Ready()
+    public IncomingDamageSnapshot Read(Node sceneRoot)
     {
-        Layer = 128;
+        _combatNode ??= FindCombatNode(sceneRoot);
 
-        _panel.Name = "STS2IncomingDamageOverlayModPanel";
-        _panel.Position = _config.Position;
-        _panel.MouseFilter = Control.MouseFilterEnum.Ignore;
-        _panel.AddThemeStyleboxOverride("panel", MakePanelStyle(new Color(0, 0, 0, 0)));
-
-        _label.Name = "STS2IncomingDamageOverlayModLabel";
-        _label.Size = new Vector2(520, 60);
-        _label.Text = "";
-        _label.Visible = false;
-        _label.MouseFilter = Control.MouseFilterEnum.Ignore;
-        _label.HorizontalAlignment = HorizontalAlignment.Left;
-        _label.VerticalAlignment = VerticalAlignment.Center;
-        _label.AddThemeFontSizeOverride("font_size", 28);
-        _label.AddThemeColorOverride("font_color", Colors.White);
-        _label.AddThemeColorOverride("font_shadow_color", new Color(0, 0, 0, 0.85f));
-        _label.AddThemeConstantOverride("shadow_offset_x", 2);
-        _label.AddThemeConstantOverride("shadow_offset_y", 2);
-
-        _panel.AddChild(_label);
-        AddChild(_panel);
-    }
-
-    public override void _Process(double delta)
-    {
-        UpdateEditMode();
-
-        if (Time.GetTicksMsec() / 1000.0 >= _nextScanAt)
-        {
-            _nextScanAt = Time.GetTicksMsec() / 1000.0 + 0.20;
-            UpdateIncomingDamage();
-        }
-    }
-
-    public override void _Input(InputEvent @event)
-    {
-        if (!IsEditMode())
-        {
-            return;
-        }
-
-        if (@event is InputEventMouseButton { ButtonIndex: MouseButton.Left } mouseButton)
-        {
-            if (mouseButton.Pressed && IsMouseInsidePanel(mouseButton.Position))
-            {
-                _isDragging = true;
-                _dragOffset = mouseButton.Position - _panel.Position;
-                GetViewport().SetInputAsHandled();
-            }
-            else if (!mouseButton.Pressed && _isDragging)
-            {
-                _isDragging = false;
-                SavePosition();
-                GetViewport().SetInputAsHandled();
-            }
-        }
-        else if (@event is InputEventMouseMotion mouseMotion && _isDragging)
-        {
-            _panel.Position = ClampToViewport(mouseMotion.Position - _dragOffset);
-            GetViewport().SetInputAsHandled();
-        }
-    }
-
-    private void UpdateIncomingDamage()
-    {
-        _combatNode ??= FindCombatNode(GetTree().Root);
-
-        if (_combatNode is null || !IsInstanceValid(_combatNode))
+        if (_combatNode is null || !GodotObject.IsInstanceValid(_combatNode))
         {
             _combatNode = null;
-            _panel.Visible = false;
-            _label.Visible = false;
-            return;
+            return new IncomingDamageSnapshot(0, 0, false, false, Colors.White);
         }
 
         object? combatState = ReadMember(_combatNode, "CombatState") ?? ReadMember(_combatNode, "_combatState");
         string localPlayerId = FindLocalPlayerId(combatState, _combatNode);
-        PlayerCreatureInfo? localPlayer = FindPlayerCreature(GetTree().Root, localPlayerId);
+        PlayerCreatureInfo? localPlayer = FindPlayerCreature(sceneRoot, localPlayerId);
         PlayerVitals playerVitals = GetPlayerVitals(localPlayer);
-        int block = playerVitals.Block;
-        IntentDamage typedDamage = SumTypedCreatureIntentDamage(GetTree().Root, localPlayer);
+        IntentDamage typedDamage = SumTypedCreatureIntentDamage(sceneRoot, localPlayer);
+
         int incoming = typedDamage.Total;
         if (!typedDamage.HasTypedIntents)
         {
             incoming = SumIncomingDamage(combatState);
             if (incoming <= 0)
             {
-                incoming = SumVisibleIntentDamage(GetTree().Root);
+                incoming = SumVisibleIntentDamage(sceneRoot);
             }
         }
 
         if (incoming <= 0)
         {
-            _panel.Visible = false;
-            _label.Visible = false;
-            return;
+            return new IncomingDamageSnapshot(0, 0, false, playerVitals.HasDefensivePotion, playerVitals.CharacterColor);
         }
 
-        int afterBlock = Math.Max(0, incoming - block);
+        int afterBlock = Math.Max(0, incoming - playerVitals.Block);
         bool isLethal = playerVitals.CurrentHp > 0 && afterBlock >= playerVitals.CurrentHp;
-        string reminder = afterBlock > 0 && playerVitals.HasPotion
-            ? "    Defensive Potion Available"
-            : "";
-        _panel.Visible = true;
-        _label.Visible = true;
-        _label.Text = isLethal
-            ? $"Incoming: {incoming}    After block: {afterBlock}{reminder}    LETHAL"
-            : $"Incoming: {incoming}    After block: {afterBlock}{reminder}";
-        _label.AddThemeColorOverride("font_color", playerVitals.CharacterColor);
-    }
-
-    private void UpdateEditMode()
-    {
-        bool editMode = IsEditMode();
-        if (editMode == _wasEditMode)
-        {
-            return;
-        }
-
-        _wasEditMode = editMode;
-        _panel.MouseFilter = editMode ? Control.MouseFilterEnum.Stop : Control.MouseFilterEnum.Ignore;
-        _label.MouseFilter = editMode ? Control.MouseFilterEnum.Stop : Control.MouseFilterEnum.Ignore;
-        _panel.AddThemeStyleboxOverride("panel", MakePanelStyle(editMode ? new Color(0, 0, 0, 0.45f) : new Color(0, 0, 0, 0)));
-
-        if (!editMode)
-        {
-            _isDragging = false;
-            SavePosition();
-        }
-    }
-
-    private static bool IsEditMode()
-    {
-        return Input.IsKeyPressed(Key.Ctrl);
-    }
-
-    private bool IsMouseInsidePanel(Vector2 mousePosition)
-    {
-        Rect2 rect = new(_panel.GlobalPosition, _panel.Size);
-        return rect.HasPoint(mousePosition);
-    }
-
-    private Vector2 ClampToViewport(Vector2 position)
-    {
-        Vector2 viewportSize = GetViewport().GetVisibleRect().Size;
-        Vector2 max = new(Math.Max(0, viewportSize.X - _panel.Size.X), Math.Max(0, viewportSize.Y - _panel.Size.Y));
-        return new Vector2(Math.Clamp(position.X, 0, max.X), Math.Clamp(position.Y, 0, max.Y));
-    }
-
-    private void SavePosition()
-    {
-        _config.SetPosition(_panel.Position);
-        _config.Save();
-    }
-
-    private static StyleBoxFlat MakePanelStyle(Color background)
-    {
-        StyleBoxFlat style = new()
-        {
-            BgColor = background,
-            BorderColor = new Color(1, 1, 1, background.A > 0 ? 0.55f : 0),
-            BorderWidthLeft = 2,
-            BorderWidthTop = 2,
-            BorderWidthRight = 2,
-            BorderWidthBottom = 2,
-            ContentMarginLeft = 8,
-            ContentMarginTop = 4,
-            ContentMarginRight = 8,
-            ContentMarginBottom = 4
-        };
-        return style;
+        return new IncomingDamageSnapshot(
+            incoming,
+            afterBlock,
+            isLethal,
+            playerVitals.HasDefensivePotion,
+            playerVitals.CharacterColor);
     }
 
     private static Node? FindCombatNode(Node root)
@@ -224,17 +85,9 @@ public partial class IncomingDamageHud : CanvasLayer
             "LocalPlayerID",
             "_localPlayerId",
             "GetLocalPlayerId");
-        if (id.Length <= 0)
-        {
-            id = ReadString(
-                combatNode,
-                "LocalPlayerId",
-                "LocalPlayerID",
-                "_localPlayerId",
-                "GetLocalPlayerId");
-        }
-
-        return id;
+        return id.Length > 0
+            ? id
+            : ReadString(combatNode, "LocalPlayerId", "LocalPlayerID", "_localPlayerId", "GetLocalPlayerId");
     }
 
     private static int SumIncomingDamage(object? combatState)
@@ -257,8 +110,6 @@ public partial class IncomingDamageHud : CanvasLayer
         total += SumDamageFromObject(ReadMember(combatState, "Intents"));
         return total;
     }
-
-    private readonly record struct IntentDamage(int Total, bool HasTypedIntents);
 
     private static IntentDamage SumTypedCreatureIntentDamage(Node root, PlayerCreatureInfo? localCreature)
     {
@@ -306,18 +157,8 @@ public partial class IncomingDamageHud : CanvasLayer
         Creature entity = player.Creature;
         bool hasDefensivePotion = entity.Player?.Potions.Any(IsDefensiveOrWeakPotion) == true;
         string characterName = FindCharacterName(entity, player.Node);
-        return new PlayerVitals(
-            entity.Block,
-            entity.CurrentHp,
-            hasDefensivePotion,
-            GetCharacterColor(characterName));
+        return new PlayerVitals(entity.Block, entity.CurrentHp, hasDefensivePotion, GetCharacterColor(characterName));
     }
-
-    private readonly record struct PlayerVitals(
-        int Block,
-        int CurrentHp,
-        bool HasPotion,
-        Color CharacterColor);
 
     private sealed record PlayerCreatureInfo(NCreature Node, Creature Creature);
 
@@ -607,18 +448,6 @@ public partial class IncomingDamageHud : CanvasLayer
         return new string(value.Where(char.IsDigit).ToArray());
     }
 
-    private static IEnumerable<Node> Walk(Node root)
-    {
-        yield return root;
-        foreach (Node child in root.GetChildren())
-        {
-            foreach (Node descendant in Walk(child))
-            {
-                yield return descendant;
-            }
-        }
-    }
-
     private static bool LooksLikeAttackIntent(object value)
     {
         string name = value.GetType().Name;
@@ -665,121 +494,6 @@ public partial class IncomingDamageHud : CanvasLayer
                     yield return item;
                 }
             }
-        }
-    }
-
-    private static object? FirstItem(object? value)
-    {
-        return Enumerate(value).FirstOrDefault();
-    }
-
-    private static int ReadInt(object? source, params string[] names)
-    {
-        foreach (string name in names)
-        {
-            object? value = ReadMember(source, name);
-            if (value is null)
-            {
-                continue;
-            }
-
-            try
-            {
-                return Convert.ToInt32(value);
-            }
-            catch
-            {
-                // Ignore non-numeric candidate members.
-            }
-        }
-
-        return 0;
-    }
-
-    private static string ReadString(object? source, params string[] names)
-    {
-        foreach (string name in names)
-        {
-            object? value = ReadMember(source, name);
-            if (value is null)
-            {
-                continue;
-            }
-
-            string? text = Convert.ToString(value);
-            if (!string.IsNullOrWhiteSpace(text))
-            {
-                return text;
-            }
-        }
-
-        return "";
-    }
-
-    private static bool ReadBool(object? source, params string[] names)
-    {
-        foreach (string name in names)
-        {
-            object? value = ReadMember(source, name);
-            if (value is null)
-            {
-                continue;
-            }
-
-            try
-            {
-                return Convert.ToBoolean(value);
-            }
-            catch
-            {
-                // Ignore non-boolean candidate members.
-            }
-        }
-
-        return false;
-    }
-
-    private static object? ReadMember(object? source, string name)
-    {
-        if (source is null)
-        {
-            return null;
-        }
-
-        const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-        Type type = source.GetType();
-
-        PropertyInfo? property = type.GetProperty(name, flags);
-        if (property is not null && property.GetIndexParameters().Length == 0)
-        {
-            return SafeGet(() => property.GetValue(source));
-        }
-
-        FieldInfo? field = type.GetField(name, flags);
-        if (field is not null)
-        {
-            return SafeGet(() => field.GetValue(source));
-        }
-
-        MethodInfo? method = type.GetMethods(flags)
-            .FirstOrDefault(candidate => candidate.Name == name && candidate.GetParameters().Length == 0);
-        if (method is not null)
-        {
-            return SafeGet(() => method.Invoke(source, null));
-        }
-
-        return null;
-    }
-
-    private static object? SafeGet(Func<object?> read)
-    {
-        try
-        {
-            return read();
-        }
-        catch
-        {
-            return null;
         }
     }
 }

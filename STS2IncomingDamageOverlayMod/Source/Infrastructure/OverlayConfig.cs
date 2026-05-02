@@ -1,7 +1,7 @@
 using System.Text.Json;
 using Godot;
 
-namespace STS2IncomingDamageOverlayMod;
+namespace STS2IncomingDamageOverlayMod.Infrastructure;
 
 internal sealed class OverlayConfig
 {

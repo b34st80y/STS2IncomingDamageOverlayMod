@@ -34,6 +34,10 @@ dotnet restore
 dotnet build -c Release
 ```
 
+## Architecture
+
+The source is split into `Application`, `Domain`, `Infrastructure`, and `Presentation` folders. See `ARCHITECTURE.md` for the dependency direction and responsibility boundaries.
+
 The template copies `STS2IncomingDamageOverlayMod.dll` and `STS2IncomingDamageOverlayMod.json` into:
 
 ```text
