@@ -23,7 +23,7 @@ internal sealed class CombatDamageReader : ICombatDamageReader
         if (_combatNode is null || !GodotObject.IsInstanceValid(_combatNode))
         {
             _combatNode = null;
-            return new IncomingDamageSnapshot(0, 0, false, false, Colors.White);
+            return new IncomingDamageSnapshot(0, 0, 0, false, false, Colors.White);
         }
 
         object? combatState = ReadMember(_combatNode, "CombatState") ?? ReadMember(_combatNode, "_combatState");
@@ -44,14 +44,16 @@ internal sealed class CombatDamageReader : ICombatDamageReader
 
         if (incoming <= 0)
         {
-            return new IncomingDamageSnapshot(0, 0, false, playerVitals.HasDefensivePotion, playerVitals.CharacterColor);
+            return new IncomingDamageSnapshot(0, 0, 0, false, playerVitals.HasDefensivePotion, playerVitals.CharacterColor);
         }
 
         int afterBlock = Math.Max(0, incoming - playerVitals.Block);
-        bool isLethal = playerVitals.CurrentHp > 0 && afterBlock >= playerVitals.CurrentHp;
+        int afterOsty = Math.Max(0, afterBlock - playerVitals.OstyHp);
+        bool isLethal = playerVitals.CurrentHp > 0 && afterOsty >= playerVitals.CurrentHp;
         return new IncomingDamageSnapshot(
             incoming,
             afterBlock,
+            afterOsty,
             isLethal,
             playerVitals.HasDefensivePotion,
             playerVitals.CharacterColor);
@@ -151,13 +153,72 @@ internal sealed class CombatDamageReader : ICombatDamageReader
     {
         if (player is null)
         {
-            return new PlayerVitals(0, 0, false, Colors.White);
+            return new PlayerVitals(0, 0, 0, false, Colors.White);
         }
 
         Creature entity = player.Creature;
         bool hasDefensivePotion = entity.Player?.Potions.Any(IsDefensiveOrWeakPotion) == true;
         string characterName = FindCharacterName(entity, player.Node);
-        return new PlayerVitals(entity.Block, entity.CurrentHp, hasDefensivePotion, GetCharacterColor(characterName));
+        int ostyHp = characterName.Contains("Necrobinder", StringComparison.OrdinalIgnoreCase)
+            ? FindOstyHp(player.Node.GetTree().Root)
+            : 0;
+        return new PlayerVitals(entity.Block, entity.CurrentHp, ostyHp, hasDefensivePotion, GetCharacterColor(characterName));
+    }
+
+    private static int FindOstyHp(Node root)
+    {
+        foreach (NCreature creatureNode in Walk(root).OfType<NCreature>())
+        {
+            Creature? creature = creatureNode.Entity;
+            if (creature is null || creature.IsDead || !LooksLikeOsty(creatureNode, creature))
+            {
+                continue;
+            }
+
+            return Math.Max(0, creature.CurrentHp);
+        }
+
+        return 0;
+    }
+
+    private static bool LooksLikeOsty(NCreature creatureNode, Creature creature)
+    {
+        object?[] candidates =
+        [
+            creatureNode,
+            creature,
+            creature.Monster,
+            creature.Player,
+            ReadMember(creature, "Model"),
+            ReadMember(creature, "Definition"),
+            ReadMember(creature, "CreatureModel"),
+            ReadMember(creature, "CreatureDefinition")
+        ];
+
+        foreach (object? candidate in candidates)
+        {
+            if (candidate is null)
+            {
+                continue;
+            }
+
+            string text = $"{ReadString(candidate, "Id", "ID", "Name", "Key")} {candidate.GetType().Name} {candidate.GetType().FullName}";
+            if (text.Contains("Osty", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        foreach (Node node in Walk(creatureNode))
+        {
+            string text = $"{node.Name} {node.GetType().Name} {node.GetType().FullName}";
+            if (text.Contains("Osty", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private sealed record PlayerCreatureInfo(NCreature Node, Creature Creature);

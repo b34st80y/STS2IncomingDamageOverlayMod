@@ -6,12 +6,16 @@ internal static class OverlayTextFormatter
 {
     public static string Format(IncomingDamageSnapshot snapshot)
     {
-        string reminder = snapshot.AfterBlock > 0 && snapshot.HasDefensivePotion
+        int playerDamage = snapshot.AfterOsty;
+        string ostyText = snapshot.AfterOsty < snapshot.AfterBlock
+            ? $"    After Osty: {snapshot.AfterOsty}"
+            : "";
+        string reminder = playerDamage > 0 && snapshot.HasDefensivePotion
             ? "    Defensive Potion Available"
             : "";
 
         return snapshot.IsLethal
-            ? $"Incoming: {snapshot.Incoming}    After block: {snapshot.AfterBlock}{reminder}    LETHAL"
-            : $"Incoming: {snapshot.Incoming}    After block: {snapshot.AfterBlock}{reminder}";
+            ? $"Incoming: {snapshot.Incoming}    After block: {snapshot.AfterBlock}{ostyText}{reminder}    LETHAL"
+            : $"Incoming: {snapshot.Incoming}    After block: {snapshot.AfterBlock}{ostyText}{reminder}";
     }
 }
