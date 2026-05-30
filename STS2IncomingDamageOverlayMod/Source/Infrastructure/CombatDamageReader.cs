@@ -1,5 +1,6 @@
 using System.Collections;
 using Godot;
+using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Models;
@@ -159,66 +160,16 @@ internal sealed class CombatDamageReader : ICombatDamageReader
         Creature entity = player.Creature;
         bool hasDefensivePotion = entity.Player?.Potions.Any(IsDefensiveOrWeakPotion) == true;
         string characterName = FindCharacterName(entity, player.Node);
-        int ostyHp = characterName.Contains("Necrobinder", StringComparison.OrdinalIgnoreCase)
-            ? FindOstyHp(player.Node.GetTree().Root)
-            : 0;
+        int ostyHp = FindOstyHp(player);
         return new PlayerVitals(entity.Block, entity.CurrentHp, ostyHp, hasDefensivePotion, GetCharacterColor(characterName));
     }
 
-    private static int FindOstyHp(Node root)
+    private static int FindOstyHp(PlayerCreatureInfo player)
     {
-        foreach (NCreature creatureNode in Walk(root).OfType<NCreature>())
-        {
-            Creature? creature = creatureNode.Entity;
-            if (creature is null || creature.IsDead || !LooksLikeOsty(creatureNode, creature))
-            {
-                continue;
-            }
-
-            return Math.Max(0, creature.CurrentHp);
-        }
-
-        return 0;
-    }
-
-    private static bool LooksLikeOsty(NCreature creatureNode, Creature creature)
-    {
-        object?[] candidates =
-        [
-            creatureNode,
-            creature,
-            creature.Monster,
-            creature.Player,
-            ReadMember(creature, "Model"),
-            ReadMember(creature, "Definition"),
-            ReadMember(creature, "CreatureModel"),
-            ReadMember(creature, "CreatureDefinition")
-        ];
-
-        foreach (object? candidate in candidates)
-        {
-            if (candidate is null)
-            {
-                continue;
-            }
-
-            string text = $"{ReadString(candidate, "Id", "ID", "Name", "Key")} {candidate.GetType().Name} {candidate.GetType().FullName}";
-            if (text.Contains("Osty", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        foreach (Node node in Walk(creatureNode))
-        {
-            string text = $"{node.Name} {node.GetType().Name} {node.GetType().FullName}";
-            if (text.Contains("Osty", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-        }
-
-        return false;
+        Creature? osty = player.Creature.Player?.Osty;
+        return osty is not null && !osty.IsDead
+            ? Math.Max(0, osty.CurrentHp)
+            : 0;
     }
 
     private sealed record PlayerCreatureInfo(NCreature Node, Creature Creature);
@@ -230,6 +181,12 @@ internal sealed class CombatDamageReader : ICombatDamageReader
             .Select(creatureNode => new PlayerCreatureInfo(creatureNode, creatureNode.Entity!))
             .Where(player => player.Creature is not null && player.Creature.IsPlayer && !player.Creature.IsDead)
             .ToList();
+
+        PlayerCreatureInfo? localContextMatch = players.FirstOrDefault(player => LocalContext.IsMe(player.Creature));
+        if (localContextMatch is not null)
+        {
+            return localContextMatch;
+        }
 
         PlayerCreatureInfo? localFlagMatch = players.FirstOrDefault(IsLocalPlayerCreature);
         if (localFlagMatch is not null)
