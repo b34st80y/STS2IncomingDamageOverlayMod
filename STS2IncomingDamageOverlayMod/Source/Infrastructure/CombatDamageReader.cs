@@ -1,5 +1,6 @@
 using System.Collections;
 using Godot;
+using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Context;
 using MegaCrit.Sts2.Core.Entities.Creatures;
 using MegaCrit.Sts2.Core.Entities.Players;
@@ -28,6 +29,11 @@ internal sealed class CombatDamageReader : ICombatDamageReader
         }
 
         object? combatState = ReadMember(_combatNode, "CombatState") ?? ReadMember(_combatNode, "_combatState");
+        if (!IsPlayerSideTurn(combatState))
+        {
+            return new IncomingDamageSnapshot(0, 0, 0, false, false, Colors.White);
+        }
+
         string localPlayerId = FindLocalPlayerId(combatState, _combatNode);
         PlayerCreatureInfo? localPlayer = FindPlayerCreature(sceneRoot, localPlayerId);
         PlayerVitals playerVitals = GetPlayerVitals(localPlayer);
@@ -78,6 +84,18 @@ internal sealed class CombatDamageReader : ICombatDamageReader
         }
 
         return null;
+    }
+
+    private static bool IsPlayerSideTurn(object? combatState)
+    {
+        if (combatState is ICombatState typedCombatState)
+        {
+            return typedCombatState.CurrentSide == CombatSide.Player;
+        }
+
+        string currentSide = Convert.ToString(ReadMember(combatState, "CurrentSide")) ?? "";
+        return currentSide.Length == 0 ||
+               currentSide.Equals(nameof(CombatSide.Player), StringComparison.OrdinalIgnoreCase);
     }
 
     private static string FindLocalPlayerId(object? combatState, Node? combatNode)
@@ -188,12 +206,6 @@ internal sealed class CombatDamageReader : ICombatDamageReader
             return localContextMatch;
         }
 
-        PlayerCreatureInfo? localFlagMatch = players.FirstOrDefault(IsLocalPlayerCreature);
-        if (localFlagMatch is not null)
-        {
-            return localFlagMatch;
-        }
-
         if (localPlayerId.Length > 0)
         {
             PlayerCreatureInfo? idMatch = players.FirstOrDefault(
@@ -207,7 +219,30 @@ internal sealed class CombatDamageReader : ICombatDamageReader
             }
         }
 
+        PlayerCreatureInfo? visibleLocalMatch = players.FirstOrDefault(player => HasVisibleStateDisplay(player.Node));
+        if (visibleLocalMatch is not null)
+        {
+            return visibleLocalMatch;
+        }
+
+        PlayerCreatureInfo? localFlagMatch = players.FirstOrDefault(IsLocalPlayerCreature);
+        if (localFlagMatch is not null)
+        {
+            return localFlagMatch;
+        }
+
         return players.Count == 1 ? players[0] : null;
+    }
+
+    private static bool HasVisibleStateDisplay(NCreature creatureNode)
+    {
+        if (ReadMember(creatureNode, "_stateDisplay") is CanvasItem stateDisplay &&
+            GodotObject.IsInstanceValid(stateDisplay))
+        {
+            return stateDisplay.Visible;
+        }
+
+        return false;
     }
 
     private static bool IsLocalPlayerCreature(PlayerCreatureInfo player)
