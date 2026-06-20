@@ -117,7 +117,8 @@ internal sealed class CombatDamageReader : ICombatDamageReader
 
         foreach (object creature in Enumerate(ReadMember(combatState, "Monsters"))
                      .Concat(Enumerate(ReadMember(combatState, "AllMonsters")))
-                     .Concat(Enumerate(ReadMember(combatState, "Creatures"))))
+                     .Concat(Enumerate(ReadMember(combatState, "Creatures")))
+                     .Distinct(ReferenceEqualityComparer.Instance))
         {
             if (LooksLikePlayer(creature))
             {
@@ -155,11 +156,11 @@ internal sealed class CombatDamageReader : ICombatDamageReader
             }
 
             IReadOnlyList<AbstractIntent> intents = owner.Monster?.NextMove?.Intents ?? Array.Empty<AbstractIntent>();
-            hasTypedIntents = true;
             foreach (AbstractIntent intent in intents)
             {
                 if (intent is AttackIntent attackIntent)
                 {
+                    hasTypedIntents = true;
                     total += attackIntent.GetTotalDamage(targets, owner);
                 }
             }
@@ -453,6 +454,7 @@ internal sealed class CombatDamageReader : ICombatDamageReader
     private static int SumVisibleIntentDamage(Node root)
     {
         int total = 0;
+        HashSet<Label> countedLabels = new(ReferenceEqualityComparer.Instance);
         foreach (Node node in Walk(root))
         {
             string nodeName = node.Name.ToString();
@@ -470,7 +472,10 @@ internal sealed class CombatDamageReader : ICombatDamageReader
                     continue;
                 }
 
-                total += ParseDamageText(label.Text);
+                if (countedLabels.Add(label))
+                {
+                    total += ParseDamageText(label.Text);
+                }
             }
         }
 
