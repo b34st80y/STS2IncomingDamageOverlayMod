@@ -1,0 +1,4 @@
+.research/
+**/bin/
+**/obj/
+**/.godot/

@@ -1,5 +1,22 @@
 # STS2 Incoming Damage Overlay Mod
 
+## Standalone Windows overlay
+
+There is now a separate desktop application in `STS2IncomingDamageOverlay/`.
+It reads a snapshot of the game's memory and displays its own transparent window.
+It does not load through the mod loader, install game files, or require BaseLib.
+
+Build the standalone project directly:
+
+```powershell
+dotnet build .\STS2IncomingDamageOverlay\STS2IncomingDamageOverlay.csproj -c Release
+& .\STS2IncomingDamageOverlay\bin\Release\net9.0-windows\STS2IncomingDamageOverlay.exe
+```
+
+Launch the game normally to use it without mods. Hold Ctrl to drag the overlay;
+Ctrl + right-click closes it. See [standalone details](STS2IncomingDamageOverlay/README.md)
+for compatibility, diagnostics, and limitations. The remaining sections describe the original mod.
+
 A small quality-of-life mod for **Slay the Spire 2** that shows estimated incoming enemy damage during combat.
 
 ```text
@@ -57,7 +74,8 @@ dotnet restore .\STS2IncomingDamageOverlayMod.sln
 dotnet build .\STS2IncomingDamageOverlayMod.sln -c Release
 ```
 
-The build copies the mod DLL and manifest into the Slay the Spire 2 mods folder when the game paths resolve correctly.
+Builds do not install the original mod. To explicitly reinstall it, build with
+`-p:InstallMod=true`; otherwise the game’s mods folder is left untouched.
 
 ## Manual Install
 
