@@ -14,7 +14,7 @@ dotnet build .\STS2IncomingDamageOverlay\STS2IncomingDamageOverlay.csproj -c Rel
 ```
 
 Launch the game normally to use it without mods. Hold Ctrl to drag the overlay;
-Ctrl + right-click closes it. See [standalone details](STS2IncomingDamageOverlay/README.md)
+Use the orange shield tray icon's **Exit** menu to close it. See [standalone details](STS2IncomingDamageOverlay/README.md)
 for compatibility, diagnostics, and limitations. The remaining sections describe the original mod.
 
 A small quality-of-life mod for **Slay the Spire 2** that shows estimated incoming enemy damage during combat.

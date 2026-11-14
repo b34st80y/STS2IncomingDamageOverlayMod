@@ -14,6 +14,19 @@ dotnet build .\STS2IncomingDamageOverlay\STS2IncomingDamageOverlay.csproj -c Rel
 ```
 
 Keep the build output folder together; the EXE needs its adjacent dependencies.
+
+### Automatic launch and close
+
+After building Release, run `./STS2IncomingDamageOverlay/Set-AutoStart.ps1`.
+This starts a hidden watcher now and registers it for your Windows sign-in.
+The watcher checks for STS2 every two seconds without reading game memory. It
+opens one overlay per game session; that overlay closes (including its tray icon)
+when the game exits. The watcher remains idle so it can detect the next launch.
+Exiting the overlay manually keeps it closed until the next game session.
+Run the same script with `-Disable` to remove automatic startup and stop the
+watcher. Keep the build folder in place, or rerun the script after moving it.
+Launching the overlay EXE directly still works independently of the watcher.
+
 Launch STS2 normally for an unmodded session. Running this beside an already-modded
 game does not remove that game's modded status. The original mod has been uninstalled;
 restart the game to unload it from any session that was already running.
@@ -22,7 +35,7 @@ Windowed/borderless display is recommended; exclusive fullscreen is unverified.
 - The window is click-through during normal play and stays visible above other apps
   while the game is in the background. Readings keep updating regardless of focus.
 - Hold **Ctrl** to show edit mode and drag the window.
-- **Ctrl + right-click** the overlay to exit.
+- To exit, right-click the orange shield tray icon and choose **Exit**.
 - An **orange shield icon** in the Windows system tray means the app is running,
   even when no damage is displayed. Hover for status; right-click for status,
   **Show/Hide overlay**, or **Exit**. Double-click toggles visibility. Windows may
@@ -66,6 +79,10 @@ seconds are hidden. No memory snapshots are written to disk.
 
 ## Compatibility and limitations
 
+- Added the inspected v0.113.0 build (2026-11-12), including Fool identification
+  and gold character text. The engine hash and native text layout are unchanged;
+  combat fields, local-player lookup, intent events, and label generation were
+  checked against the updated assembly. Unknown builds still stop at the hash check.
 - The native text offset is build-specific. An EXE or game assembly update disables
   readings until the layout and field mappings are revalidated. Do not bypass the
   hash check merely to make an updated game attach.
@@ -110,3 +127,9 @@ gameplay with the replacement overlay running. The Release solution build and al
 19 self-test checks passed.
 Builds no longer install the original mod automatically. Reinstalling it requires
 explicitly passing `-p:InstallMod=true` when building the mod project.
+
+Live validation on 2026-11-14 with Fool on v0.113.0: all 40 readings connected;
+visible attacks `1x3 + 5 + 7` matched incoming 15, with local HP 40. Warm reads
+averaged 4.6 ms (7.9 ms maximum), with one setup snapshot. The standalone Release
+build and all 19 self-test checks passed. This validates the existing damage
+estimate for Fool; it does not add simulation of character-specific mechanics.

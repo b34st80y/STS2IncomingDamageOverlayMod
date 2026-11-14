@@ -6,7 +6,13 @@ namespace STS2IncomingDamageOverlay;
 internal sealed class CombatMemoryReader : IDisposable
 {
     private const string EngineHash = "8602C26BFFD2937E3841835FD8360EF8E974624A543E05977229FD3D062BE231";
-    private const string AssemblyHash = "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9";
+    // Both inspected builds use the same native engine/text layout. Managed field
+    // offsets are discovered from each process's metadata, not copied across builds.
+    private static readonly HashSet<string> AssemblyHashes = new(StringComparer.Ordinal)
+    {
+        "0861BFA1DF347538D932F22D580E75420F08082792EB914E53B4882764ACDBE9",
+        "A6CC282C52B96AD2E01D5692B1144B33AA8E3BA4E969582F648ECB13B2F751D7" // v0.113.0 (2026-11-12)
+    };
     private const string Creature = "MegaCrit.Sts2.Core.Entities.Creatures.Creature";
     private const string IntentNode = "MegaCrit.Sts2.Core.Nodes.Combat.NIntent";
     private (int Id, long Start)? _identity;
@@ -38,7 +44,7 @@ internal sealed class CombatMemoryReader : IDisposable
                 {
                     string exe = process.MainModule!.FileName;
                     string data = Path.Combine(Path.GetDirectoryName(exe)!, "data_sts2_windows_x86_64");
-                    if (Hash(exe) != EngineHash || Hash(Path.Combine(data, "sts2.dll")) != AssemblyHash)
+                    if (Hash(exe) != EngineHash || !AssemblyHashes.Contains(Hash(Path.Combine(data, "sts2.dll"))))
                         throw new InvalidDataException("Game update detected — reader needs a compatibility update");
                     SnapshotCount++;
                     _memory = new LiveMemory(pid, Path.Combine(data, "mscordaccore.dll"));

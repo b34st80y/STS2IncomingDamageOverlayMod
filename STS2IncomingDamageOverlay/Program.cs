@@ -6,6 +6,7 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        if (args.Contains("--watch")) return GameWatcher.Run();
         if (args.Contains("--benchmark"))
         {
             using var reader = new CombatMemoryReader();
@@ -37,7 +38,23 @@ internal static class Program
         using var instance = new Mutex(true, "Local\\STS2IncomingDamageExternalOverlay", out bool first);
         if (!first) return 0;
         var app = new Application();
-        app.Run(new OverlayWindow());
+        var window = new OverlayWindow();
+        int gameArgument = Array.IndexOf(args, "--game-pid");
+        if (gameArgument >= 0 && gameArgument + 2 < args.Length
+            && int.TryParse(args[gameArgument + 1], out int gamePid)
+            && long.TryParse(args[gameArgument + 2], out long gameStart))
+        {
+            var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            timer.Tick += (_, _) =>
+            {
+                if (GameWatcher.IsRunning(gamePid, gameStart)) return;
+                timer.Stop();
+                window.Close();
+            };
+            window.Closed += (_, _) => timer.Stop();
+            timer.Start();
+        }
+        app.Run(window);
         return 0;
     }
 }

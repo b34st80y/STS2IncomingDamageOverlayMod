@@ -13,7 +13,7 @@ namespace STS2IncomingDamageOverlay;
 internal sealed class OverlayWindow : Window
 {
     private readonly TextBlock _text = new() { FontSize = 22, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White };
-    private readonly TextBlock _hint = new() { Text = "External overlay · Ctrl: drag / right-click to exit", FontSize = 11, Foreground = Brushes.LightGray };
+    private readonly TextBlock _hint = new() { Text = "Hold Ctrl + left-drag to move · Close using tray icon → Exit", FontSize = 11, Foreground = Brushes.LightGray };
     private readonly Border _panel;
     private readonly CombatMemoryReader _reader = new();
     private readonly DispatcherTimer _uiTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
@@ -52,7 +52,6 @@ internal sealed class OverlayWindow : Window
         }
         catch (Exception) { /* Missing or invalid position uses the default. */ }
         MouseLeftButtonDown += (_, _) => { if (_editing) { DragMove(); SavePosition(); } };
-        MouseRightButtonUp += (_, _) => { if (_editing) Close(); };
         SourceInitialized += (_, _) =>
         {
             _handle = new WindowInteropHelper(this).Handle;
@@ -105,6 +104,7 @@ internal sealed class OverlayWindow : Window
             "Regent" => Brushes.Orange,
             "Necrobinder" => Brushes.Violet,
             "Defect" => Brushes.DeepSkyBlue,
+            "Fool" => Brushes.Gold,
             _ => Brushes.White
         };
         if (!_overlayVisible) _panel.Opacity = 0;
