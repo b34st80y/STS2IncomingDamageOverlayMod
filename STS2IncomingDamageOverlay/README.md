@@ -1,5 +1,9 @@
 # Standalone incoming-damage overlay
 
+**This is the newest, actively supported version of the project.** Use this app
+for current compatibility updates, fixes, and new features. The original in-game
+mod in `STS2IncomingDamageOverlayMod/` is legacy and retained for reference.
+
 Windows x64 desktop overlay using WPF and Microsoft's ClrMD. Requires the .NET 9
 Desktop Runtime (already present on the development machine). No game assembly
 references, mod loader, Harmony, BaseLib, injected DLL, or game-file writes.

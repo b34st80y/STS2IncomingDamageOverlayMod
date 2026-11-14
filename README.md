@@ -1,9 +1,19 @@
-# STS2 Incoming Damage Overlay Mod
+# STS2 Incoming Damage Overlay
 
-## Standalone Windows overlay
+**Use the standalone Windows overlay. It is the newest, actively supported version
+and receives compatibility updates, fixes, and new features.** The original
+in-game mod is **legacy** and is retained for reference; it is not the recommended
+installation for new users.
 
-There is now a separate desktop application in `STS2IncomingDamageOverlay/`.
-It reads a snapshot of the game's memory and displays its own transparent window.
+| Version | Status | Installation |
+| --- | --- | --- |
+| [Standalone overlay](STS2IncomingDamageOverlay/README.md) | Current and actively supported | Separate Windows app; no mod installation |
+| Original in-game mod | Legacy | Installed through the game's mod loader; counts as a modded game |
+
+## Recommended: standalone Windows overlay
+
+The desktop application lives in `STS2IncomingDamageOverlay/`.
+It reads the game's memory and displays estimated incoming damage in its own transparent window.
 It does not load through the mod loader, install game files, or require BaseLib.
 
 Build the standalone project directly:
@@ -13,9 +23,23 @@ dotnet build .\STS2IncomingDamageOverlay\STS2IncomingDamageOverlay.csproj -c Rel
 & .\STS2IncomingDamageOverlay\bin\Release\net9.0-windows\STS2IncomingDamageOverlay.exe
 ```
 
-Launch the game normally to use it without mods. Hold Ctrl to drag the overlay;
-Use the orange shield tray icon's **Exit** menu to close it. See [standalone details](STS2IncomingDamageOverlay/README.md)
-for compatibility, diagnostics, and limitations. The remaining sections describe the original mod.
+Launch the game normally to use it without mods. Hold **Ctrl + left-drag** to move
+the overlay. Use the orange shield tray icon's **Exit** menu to close it.
+
+To open and close the overlay automatically with the game, run this once after building:
+
+```powershell
+.\STS2IncomingDamageOverlay\Set-AutoStart.ps1
+```
+
+See the [standalone guide](STS2IncomingDamageOverlay/README.md) for supported game
+builds, automatic startup, diagnostics, and calculation limitations.
+
+## Legacy: original in-game mod
+
+**Everything below applies only to the legacy mod.** These instructions are kept
+for existing mod users and reference. Current overlay compatibility updates do not
+imply that the legacy mod has been updated or tested on the same game build.
 
 A small quality-of-life mod for **Slay the Spire 2** that shows estimated incoming enemy damage during combat.
 
@@ -25,7 +49,7 @@ Incoming: 37    After block: 12
 
 The overlay is read-only. It does not change cards, relics, enemies, RNG, saves, or combat behavior.
 
-## What It Shows
+### What the legacy mod shows
 
 - Total incoming attack damage from visible enemy intents.
 - Estimated damage after your current block.
@@ -33,9 +57,9 @@ The overlay is read-only. It does not change cards, relics, enemies, RNG, saves,
 - A defensive-potion reminder when damage is getting through and a defensive or weak-related potion appears to be available.
 - Character-colored overlay text when the local player character can be identified.
 
-## Current Status
+### Legacy status and limitations
 
-This is an early Slay the Spire 2 mod and the game internals are still moving. The mod prefers typed STS2 intent data when available and falls back to reflection and visible intent labels when needed.
+Development and support now focus on the standalone overlay. The legacy mod prefers typed STS2 intent data when available and falls back to reflection and visible intent labels when needed.
 
 Known limitations:
 
@@ -44,13 +68,13 @@ Known limitations:
 - Multiplayer/local-player targeting is handled best-effort.
 - It should be tested against the current Early Access build after game updates.
 
-## Usage
+### Legacy mod usage
 
 During combat, the overlay appears only when incoming damage is detected.
 
 Hold `Ctrl` to enter edit mode, then drag the overlay to reposition it. The position is saved to `config.json` next to the built mod DLL.
 
-## Build Requirements
+### Legacy mod build requirements
 
 - Slay the Spire 2 installed through Steam.
 - A compatible .NET SDK for the project target framework.
@@ -65,7 +89,7 @@ C:/Program Files (x86)/Steam/steamapps/common/Slay the Spire 2
 
 If your install is elsewhere, configure `Sts2Path` as described by the project props/template setup.
 
-## Build
+### Legacy mod build
 
 From the repository root:
 
@@ -77,7 +101,7 @@ dotnet build .\STS2IncomingDamageOverlayMod.sln -c Release
 Builds do not install the original mod. To explicitly reinstall it, build with
 `-p:InstallMod=true`; otherwise the game’s mods folder is left untouched.
 
-## Manual Install
+### Legacy mod manual installation
 
 After building, copy these files into a folder named `STS2IncomingDamageOverlayMod` inside the game's `mods` folder:
 
@@ -86,7 +110,7 @@ After building, copy these files into a folder named `STS2IncomingDamageOverlayM
 
 Then launch Slay the Spire 2 using the modded launch option.
 
-## Project Layout
+### Legacy mod project layout
 
 ```text
 STS2IncomingDamageOverlayMod.sln
@@ -94,13 +118,12 @@ STS2IncomingDamageOverlayMod/
   STS2IncomingDamageOverlayMod.csproj
   STS2IncomingDamageOverlayMod.json
   Source/
-    MainFile.cs
-    IncomingDamageHud.cs
-    OverlayConfig.cs
+    Presentation/
+      IncomingDamageHud.cs
 ```
 
-The main HUD logic lives in `STS2IncomingDamageOverlayMod/Source/IncomingDamageHud.cs`.
+The legacy HUD logic lives in `STS2IncomingDamageOverlayMod/Source/Presentation/IncomingDamageHud.cs`.
 
-## Safety
+### Legacy mod behavior
 
 This mod is intended to be informational only. The manifest declares `affects_gameplay: false` because it displays combat information without mutating game state.
