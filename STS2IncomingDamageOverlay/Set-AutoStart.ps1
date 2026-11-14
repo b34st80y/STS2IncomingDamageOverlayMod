@@ -9,8 +9,11 @@ if ($Disable) {
         ForEach-Object { Stop-Process -Id $_.ProcessId -ErrorAction SilentlyContinue }
     return
 }
-$exe = Join-Path $PSScriptRoot 'bin\Release\net9.0-windows\STS2IncomingDamageOverlay.exe'
-if (!(Test-Path -LiteralPath $exe)) { throw 'Build the Release overlay first.' }
+$exe = Join-Path $PSScriptRoot 'STS2IncomingDamageOverlay.exe'
+if (!(Test-Path -LiteralPath $exe)) {
+    $exe = Join-Path $PSScriptRoot 'bin\Release\net9.0-windows\STS2IncomingDamageOverlay.exe'
+}
+if (!(Test-Path -LiteralPath $exe)) { throw 'Extract the complete release ZIP, or build the Release overlay first.' }
 New-Item -Path $runKey -Force | Out-Null
 Set-ItemProperty -LiteralPath $runKey -Name $name -Value ('"' + $exe + '" --watch')
 Start-Process -FilePath $exe -ArgumentList '--watch' -WindowStyle Hidden

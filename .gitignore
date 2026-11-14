@@ -1,4 +1,5 @@
 .research/
+artifacts/
 **/bin/
 **/obj/
 **/.godot/

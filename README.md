@@ -12,6 +12,20 @@ installation for new users.
 
 ## Recommended: standalone Windows overlay
 
+### Download and run (no build required)
+
+Download **[STS2-Incoming-Damage-Overlay-win-x64.zip](https://github.com/b34st80y/STS2IncomingDamageOverlayMod/releases/latest/download/STS2-Incoming-Damage-Overlay-win-x64.zip)**
+from the [latest release](https://github.com/b34st80y/STS2IncomingDamageOverlayMod/releases/latest).
+Extract the **entire ZIP**, then double-click `STS2IncomingDamageOverlay.exe`.
+The Windows x64 package includes the .NET runtime; no SDK or separate runtime install is needed.
+Keep all extracted files together. For automatic launch with the game, double-click
+`Enable-AutoStart.cmd` in the extracted folder; use `Disable-AutoStart.cmd` to turn it off.
+
+Check the release notes for the supported game build. The standalone overlay checks
+game-file versions and may need an update after STS2 updates.
+
+### Build from source (optional)
+
 The desktop application lives in `STS2IncomingDamageOverlay/`.
 It reads the game's memory and displays estimated incoming damage in its own transparent window.
 It does not load through the mod loader, install game files, or require BaseLib.

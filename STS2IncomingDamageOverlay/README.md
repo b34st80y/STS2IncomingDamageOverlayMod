@@ -4,11 +4,19 @@
 for current compatibility updates, fixes, and new features. The original in-game
 mod in `STS2IncomingDamageOverlayMod/` is legacy and retained for reference.
 
-Windows x64 desktop overlay using WPF and Microsoft's ClrMD. Requires the .NET 9
-Desktop Runtime (already present on the development machine). No game assembly
+Windows x64 desktop overlay using WPF and Microsoft's ClrMD. The downloadable
+release includes the .NET runtime; a normal source build requires the .NET 9
+Desktop Runtime. No game assembly
 references, mod loader, Harmony, BaseLib, injected DLL, or game-file writes.
 
-## Run
+## Download and run
+
+Get the Windows x64 ZIP from the [latest release](https://github.com/b34st80y/STS2IncomingDamageOverlayMod/releases/latest).
+Extract the entire ZIP and run `STS2IncomingDamageOverlay.exe`. No building or
+separate .NET installation is needed. Keep the EXE and all accompanying files together.
+The included `RELEASE-README.txt` covers controls, compatibility, and automatic startup.
+
+## Build and run from source
 
 From the repository root:
 
@@ -22,6 +30,7 @@ Keep the build output folder together; the EXE needs its adjacent dependencies.
 ### Automatic launch and close
 
 After building Release, run `./STS2IncomingDamageOverlay/Set-AutoStart.ps1`.
+For a downloaded release, double-click `Enable-AutoStart.cmd` instead.
 This starts a hidden watcher now and registers it for your Windows sign-in.
 The watcher checks for STS2 every two seconds without reading game memory. It
 opens one overlay per game session; that overlay closes (including its tray icon)
@@ -29,6 +38,7 @@ when the game exits. The watcher remains idle so it can detect the next launch.
 Exiting the overlay manually keeps it closed until the next game session.
 Run the same script with `-Disable` to remove automatic startup and stop the
 watcher. Keep the build folder in place, or rerun the script after moving it.
+Downloaded releases also include `Disable-AutoStart.cmd` for this purpose.
 Launching the overlay EXE directly still works independently of the watcher.
 
 Launch STS2 normally for an unmodded session. Running this beside an already-modded
@@ -108,6 +118,10 @@ seconds are hidden. No memory snapshots are written to disk.
   built into the application.
 
 ## Verification
+
+Maintainers can create a self-contained Windows x64 ZIP and checksum with
+`./Publish-Overlay.ps1 -Version 1.0.0` from the repository root. Output goes under
+`artifacts/overlay-1.0.0/` and is excluded from Git.
 
 ```powershell
 dotnet .\STS2IncomingDamageOverlay\bin\Release\net9.0-windows\STS2IncomingDamageOverlay.dll --self-test
