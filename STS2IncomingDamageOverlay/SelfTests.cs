@@ -38,7 +38,20 @@ internal static class SelfTests
         reader.Begin(); reader.Array(0x10000, "Test");
         BitConverter.GetBytes(1).CopyTo(memory, 8);
         MustReject(reader.Validate, "Changed collection was accepted");
-        Console.WriteLine("19 checks passed (including changed-pointer/collection rejection and read bounds).");
+        // A native child models startup before the game has loaded the CLR.
+        // ClrMD deliberately disallows live attachment to this test process itself.
+        var start = new System.Diagnostics.ProcessStartInfo(Path.Combine(Environment.SystemDirectory, "cmd.exe"), "/c pause")
+        { UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true, RedirectStandardOutput = true };
+        using (var child = System.Diagnostics.Process.Start(start)!)
+        {
+            try
+            {
+                if (LiveMemory.IsCombatMetadataReady(child.Id, "unused-before-CLR-initialization"))
+                    throw new Exception("A process without a CLR was marked ready");
+            }
+            finally { if (!child.HasExited) child.Kill(); child.WaitForExit(); }
+        }
+        Console.WriteLine("20 checks passed (including startup readiness, changed-pointer/collection rejection and read bounds).");
         return 0;
     }
 

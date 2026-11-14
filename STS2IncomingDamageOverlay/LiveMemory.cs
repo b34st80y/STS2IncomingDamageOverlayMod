@@ -26,6 +26,35 @@ internal sealed class LiveMemory : IDisposable
 
     internal LiveMemory(Func<ulong, int, byte[]> read) => _testRead = read;
 
+    private static readonly string[] CombatTypes =
+    [
+        "Combat.CombatManager", "Combat.CombatTurnState", "Combat.CombatState",
+        "Combat.CombatStateTracker", "Context.LocalContext", "Entities.Creatures.Creature",
+        "Entities.Players.Player", "Models.MonsterModel",
+        "MonsterMoves.MonsterMoveStateMachine.MoveState", "Nodes.Combat.NIntent"
+    ];
+
+    // Startup can precede CLR initialization and lazy loading of combat types.
+    // This readiness check does not suspend the process or create a PSS snapshot.
+    // Dispose all live metadata here; the actual reader still uses one snapshot.
+    internal static bool IsCombatMetadataReady(int pid, string dac)
+    {
+        using var target = DataTarget.AttachToProcess(pid, suspend: false);
+        var clr = target.ClrVersions.SingleOrDefault();
+        if (clr == null) return false;
+        using var runtime = clr.CreateRuntime(dac);
+        var module = runtime.EnumerateModules().SingleOrDefault(m => Path.GetFileName(m.Name) == "sts2.dll");
+        if (module == null) return false;
+        foreach (string name in CombatTypes)
+            if (module.GetTypeByName("MegaCrit.Sts2.Core." + name) == null) return false;
+        var domain = runtime.AppDomains.SingleOrDefault();
+        if (domain == null) return false;
+        var manager = module.GetTypeByName("MegaCrit.Sts2.Core.Combat.CombatManager")!;
+        var local = module.GetTypeByName("MegaCrit.Sts2.Core.Context.LocalContext")!;
+        return manager.GetStaticFieldByName("<Instance>k__BackingField")?.GetAddress(domain) is > 0
+            && local.GetStaticFieldByName("<NetId>k__BackingField")?.GetAddress(domain) is > 0;
+    }
+
     public LiveMemory(int pid, string dac)
     {
         _handle = OpenProcess(0x0010 | 0x1000, false, pid); // VM_READ + QUERY_LIMITED_INFORMATION

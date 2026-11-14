@@ -18,6 +18,8 @@ internal sealed class CombatMemoryReader : IDisposable
     private (int Id, long Start)? _identity;
     private LiveMemory? _memory;
     private string? _setupError;
+    private string? _pendingDac;
+    private long _nextReadinessCheck;
     public int SnapshotCount { get; private set; }
     public int LastBytesRead => _memory?.BytesRead ?? 0;
     private static readonly HashSet<string> DefensivePotions = new(StringComparer.Ordinal)
@@ -32,25 +34,56 @@ internal sealed class CombatMemoryReader : IDisposable
         {
             if (processes.Length != 1)
             {
-                Dispose(); _identity = null;
+                // A diagnostic snapshot can briefly appear as an extra process.
+                // Preserve an existing connection so that transient duplicates do
+                // not force another snapshot when they disappear.
+                if (processes.Length == 0) { Dispose(); _identity = null; _pendingDac = null; }
                 return new(processes.Length == 0 ? "Waiting for Slay the Spire 2" : "Multiple game instances — close extras");
             }
             var process = processes[0]; pid = process.Id;
             var identity = (pid, process.StartTime.ToUniversalTime().Ticks);
             if (_identity != identity)
             {
-                Dispose(); _identity = identity; _setupError = null;
+                Dispose(); _identity = identity; _setupError = null; _pendingDac = null; _nextReadinessCheck = 0;
                 try
                 {
                     string exe = process.MainModule!.FileName;
                     string data = Path.Combine(Path.GetDirectoryName(exe)!, "data_sts2_windows_x86_64");
                     if (Hash(exe) != EngineHash || !AssemblyHashes.Contains(Hash(Path.Combine(data, "sts2.dll"))))
                         throw new InvalidDataException("Game update detected — reader needs a compatibility update");
-                    SnapshotCount++;
-                    _memory = new LiveMemory(pid, Path.Combine(data, "mscordaccore.dll"));
+                    _pendingDac = Path.Combine(data, "mscordaccore.dll");
                 }
                 catch (Exception ex) { _setupError = ex.Message; }
-                // Never retry failed setup in a polling loop: that would reintroduce stutter.
+            }
+            if (_memory == null && _pendingDac != null)
+            {
+                if (Environment.TickCount64 < _nextReadinessCheck)
+                    return new(_setupError ?? "Waiting for combat…", ProcessId: pid);
+                _nextReadinessCheck = Environment.TickCount64 + 5000;
+                // Only cheap, non-suspending metadata discovery is retried. Never
+                // repeat a failed PSS snapshot in the normal polling loop.
+                try
+                {
+                    if (!LiveMemory.IsCombatMetadataReady(pid, _pendingDac))
+                    {
+                        _setupError = null;
+                        return new("Waiting for combat…", ProcessId: pid);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _setupError = $"Waiting for game initialization: {ex.Message}";
+                    return new(_setupError, ProcessId: pid);
+                }
+                string dac = _pendingDac;
+                _pendingDac = null;
+                try
+                {
+                    SnapshotCount++;
+                    _memory = new LiveMemory(pid, dac);
+                    _setupError = null;
+                }
+                catch (Exception ex) { _setupError = $"Connection failed — restart overlay: {ex.Message}"; }
             }
             if (_memory == null) return new(_setupError ?? "Reader unavailable", ProcessId: pid);
             var m = _memory;

@@ -64,9 +64,13 @@ Windowed/borderless display is recommended; exclusive fullscreen is unverified.
 ## How data is read
 
 1. Verify the game EXE and `sts2.dll` SHA-256 against the inspected build.
-2. Create **one** Windows PSS snapshot per game process to discover static storage
+2. Wait for the CLR and required combat metadata with a non-suspending check,
+   at most once every five seconds. This lets automatic startup connect when
+   combat types load instead of caching an early waiting result permanently.
+   Then create **one** Windows PSS snapshot per game process to discover static storage
    slots, field offsets, and loaded type identities. Dispose the snapshot and ClrMD
-   runtime immediately after setup. A failed setup is not retried automatically.
+   runtime immediately after setup. Readiness checks do not take snapshots;
+   a failure during the snapshot itself still requires a manual overlay restart.
 3. Read the active CombatManager state and LocalContext net ID. Match the local
    player rather than assuming the first player is yours.
 4. Follow `CombatManager.StateTracker.CombatStateChanged` event subscribers to

@@ -24,8 +24,9 @@ COMPATIBILITY
 This release supports the inspected v0.113.0 game build dated 2026-11-12, including
 Fool, and the earlier inspected build. Exact game-file hashes are checked.
 If an update changes those files, readings stop until a compatible overlay is released.
-If the reader is waiting for combat or requests refreshed metadata, enter a combat,
-exit using the tray menu, and run the EXE again.
+At game startup, the reader waits for combat data and connects automatically once
+it loads (checked every five seconds). If it explicitly requests refreshed metadata
+or reports a connection failure, exit using the tray menu and run the EXE again.
 
 Damage after block/Osty is an estimate; special mitigation and character mechanics
 are not fully simulated. This app does not modify the game or remove existing mods.
