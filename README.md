@@ -1,16 +1,22 @@
 # STS2 Incoming Damage Overlay
 
-**Use the standalone Windows overlay. It is the newest, actively supported version
-and receives compatibility updates, fixes, and new features.** The original
-in-game mod is **legacy** and is retained for reference; it is not the recommended
-installation for new users.
+Standalone overlays are available for Windows and macOS. Both can start during an existing run. The original in-game mod is retained for reference.
 
 | Version | Status | Installation |
 | --- | --- | --- |
-| [Standalone overlay](STS2IncomingDamageOverlay/README.md) | Current and actively supported | Separate Windows app; no mod installation |
+| [Standalone Windows overlay](STS2IncomingDamageOverlay/README.md) | Current and actively supported | Separate Windows app; no mod installation |
+| [Standalone Mac overlay](macOS/README.md) | Tested on Apple silicon with STS2 v0.113.1 | Menu-bar app that reads the visible game window |
 | Original in-game mod | Legacy | Installed through the game's mod loader; counts as a modded game |
 
-## Recommended: standalone Windows overlay
+## Standalone Mac overlay
+
+Run `./macOS/build.sh`, then open `artifacts/macOS/STS2 Damage Overlay.app`.
+Allow Screen Recording when macOS asks. The click-through panel shows the sum
+of visible attack labels and an after-block estimate when it can identify the
+player’s health bar. Use the shield in the menu bar to move, hide, or quit the
+overlay. The [Mac guide](macOS/README.md) covers build prerequisites and recognition limits.
+
+## Standalone Windows overlay
 
 ### Download and run (no build required)
 
